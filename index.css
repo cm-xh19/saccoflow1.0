@@ -592,6 +592,43 @@ button {
   align-items: center;
 }
 
+.social-icons {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+}
+
+.social-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: rgba(255, 255, 255, 0.8);
+  transition: all 0.3s ease;
+}
+
+.social-icon:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--white);
+  transform: translateY(-2px);
+}
+
+.social-icon svg {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+}
+
+.footer-social {
+  display: flex;
+  gap: 12px;
+}
+
 .reveal {
   animation: fadeUp 0.8s ease both;
 }
@@ -724,6 +761,67 @@ button {
   .platform-index {
     width: 38px;
     height: 38px;
+  }
+}
+
+@media (max-width: 600px) {
+  .circle-card {
+    padding: 32px 24px;
+  }
+
+  .circle-card h2 {
+    font-size: 1.5rem;
+  }
+
+  .circle-card p {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+}
+
+@media (max-width: 480px) {
+  .circle-card {
+    padding: 28px 20px;
+    width: min(360px, 90vw);
+    height: min(360px, 90vw);
+  }
+
+  .circle-card h2 {
+    font-size: 1.3rem;
+    margin-bottom: 12px;
+  }
+
+  .circle-card p {
+    font-size: 0.85rem;
+    line-height: 1.4;
+  }
+
+  .nav {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .nav-links {
+    display: none;
+  }
+
+  .nav-cta {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .social-icons {
+    gap: 12px;
+  }
+
+  .social-icon {
+    width: 32px;
+    height: 32px;
+  }
+
+  .social-icon svg {
+    width: 16px;
+    height: 16px;
   }
 }
 

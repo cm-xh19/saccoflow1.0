@@ -22,6 +22,7 @@ interface LoanRequest {
     purpose: string;
     status: 'Pending' | 'Approved' | 'Rejected';
     date: string;
+    repaymentDate: string;
 }
 
 interface Reminder {
@@ -47,7 +48,7 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
         name: '',
         amount: '',
         purpose: '',
-        term: '12'
+        repaymentDate: ''
     });
     const [loanSuccess, setLoanSuccess] = useState(false);
 
@@ -59,14 +60,15 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
 
     const handleLoanSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (!loanForm.amount || !loanForm.purpose) return;
+        if (!loanForm.amount || !loanForm.purpose || !loanForm.repaymentDate) return;
 
         const newLoan: LoanRequest = {
             id: nextId.current++,
             amount: Number(loanForm.amount),
             purpose: loanForm.purpose,
             status: 'Pending',
-            date: new Date().toISOString().split('T')[0]
+            date: new Date().toISOString().split('T')[0],
+            repaymentDate: loanForm.repaymentDate
         };
 
         setLoans(prev => [newLoan, ...prev]);
@@ -74,7 +76,7 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
         setTimeout(() => {
             setLoanSuccess(false);
             setActiveTab('home');
-            setLoanForm({ ...loanForm, amount: '', purpose: '' });
+            setLoanForm({ ...loanForm, amount: '', purpose: '', repaymentDate: '' });
         }, 2000);
     };
 
@@ -108,6 +110,13 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
                             <div className="metric-card">
                                 <div className="metric-label">Outstanding Loan</div>
                                 <div className="metric-value">UGX {outstandingLoan.toLocaleString()}</div>
+                                {loans.find(l => l.status === 'Approved') && (
+                                    <div style={{ marginTop: '12px', fontSize: '0.85rem', color: '#e53e3e', fontWeight: 600 }}>
+                                        Next Deadline: {loans
+                                            .filter(l => l.status === 'Approved')
+                                            .sort((a, b) => a.repaymentDate.localeCompare(b.repaymentDate))[0].repaymentDate}
+                                    </div>
+                                )}
                             </div>
                         </div>
 
@@ -165,12 +174,15 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
                                     <h4 style={{ marginBottom: '16px', color: '#1a1f36' }}>Loan Details</h4>
                                     <div className="form-grid">
                                         <div><label className="label-field">Desired Loan Amount (UGX) *</label><input type="number" className="input-field" placeholder="0" required value={loanForm.amount} onChange={e => setLoanForm({ ...loanForm, amount: e.target.value })} /></div>
-                                        <div><label className="label-field">Repayment Term (Months)</label>
-                                            <select className="input-field" value={loanForm.term} onChange={e => setLoanForm({ ...loanForm, term: e.target.value })}>
-                                                <option value="6">6 Months</option>
-                                                <option value="12">12 Months</option>
-                                                <option value="24">24 Months</option>
-                                            </select>
+                                        <div><label className="label-field">Repayment Deadline *</label>
+                                            <input
+                                                type="date"
+                                                className="input-field"
+                                                required
+                                                min={new Date().toISOString().split('T')[0]}
+                                                value={loanForm.repaymentDate}
+                                                onChange={e => setLoanForm({ ...loanForm, repaymentDate: e.target.value })}
+                                            />
                                         </div>
                                         <div style={{ gridColumn: '1 / -1' }}><label className="label-field">Loan Purpose *</label><textarea className="input-field" rows={3} placeholder="E.g. Business expansion, school fees..." required value={loanForm.purpose} onChange={e => setLoanForm({ ...loanForm, purpose: e.target.value })} /></div>
                                     </div>

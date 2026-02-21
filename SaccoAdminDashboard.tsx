@@ -14,7 +14,7 @@ interface Transaction {
     id: number; memberName: string; type: 'Deposit' | 'Withdrawal' | 'Loan'; amount: number; date: string; note: string;
 }
 interface Loan {
-    id: number; memberName: string; amount: number; purpose: string; status: 'Pending' | 'Approved' | 'Rejected'; date: string;
+    id: number; memberName: string; amount: number; purpose: string; status: 'Pending' | 'Approved' | 'Rejected'; date: string; repaymentDate: string;
 }
 interface AuditLog {
     id: number; action: string; user: string; date: string; details: string;
@@ -249,7 +249,7 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                                 <div className="dash-empty-state"><Briefcase size={48} strokeWidth={1.5} /><p>No loan applications yet.</p></div>
                             ) : (
                                 <table className="dash-table">
-                                    <thead><tr><th>Member</th><th>Amount (UGX)</th><th>Purpose</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+                                    <thead><tr><th>Member</th><th>Amount (UGX)</th><th>Purpose</th><th>Applied On</th><th>Deadline</th><th>Status</th><th>Actions</th></tr></thead>
                                     <tbody>
                                         {loans.map(l => (
                                             <tr key={l.id}>
@@ -257,6 +257,7 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                                                 <td>{l.amount.toLocaleString()}</td>
                                                 <td>{l.purpose}</td>
                                                 <td>{l.date}</td>
+                                                <td>{l.repaymentDate}</td>
                                                 <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: l.status === 'Approved' ? '#e6f4ea' : l.status === 'Rejected' ? '#fce8e8' : '#fef9e7', color: l.status === 'Approved' ? '#2d7a47' : l.status === 'Rejected' ? '#c53030' : '#92610a' }}>{l.status}</span></td>
                                                 <td style={{ display: 'flex', gap: '8px' }}>
                                                     {l.status === 'Pending' && (<>

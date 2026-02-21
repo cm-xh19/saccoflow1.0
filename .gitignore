@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.env
+.env.local
+.vite/
+.DS_Store
+*.log
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.code-workspace
+tsconfig.tsbuildinfo

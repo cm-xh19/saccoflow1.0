@@ -1,17 +1,22 @@
-<!doctype html>
-<html lang="en">
+<!DOCTYPE html>
+<html>
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8">
     <title>SaccoFlow | Digital-First SACCO Platform</title>
-    <meta
-      name="description"
-      content="SaccoFlow helps SACCOs move from manual paperwork to a digital-first member experience with transparent operations and automated compliance."
-    />
-    <script type="module" crossorigin src="/saccoflow-landing-page/assets/index-CJHu1u_2.js"></script>
-    <link rel="stylesheet" crossorigin href="/saccoflow-landing-page/assets/index-BnKrLGiC.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <script>
+      // Redirect 404 pages to index.html for SPA routing on GitHub Pages
+      var pathSegmentsToKeep = 1;
+      var l = window.location;
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+        l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') + '/?/' +
+        l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+        (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+        l.hash
+      );
+    </script>
   </head>
   <body>
-    <div id="root"></div>
   </body>
 </html>

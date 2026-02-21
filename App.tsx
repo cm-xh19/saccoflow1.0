@@ -127,7 +127,7 @@ function AnimatedHeadline() {
       <h1 className="reveal delay-1">
         <div className="mb-2">End Paperwork. Stop Fraud.</div>
         <div>
-          Build <span key={words[index]} className="animate-word" style={{ color: '#93c5fd' }}>{words[index]}</span>
+          Build <span className="animate-word" style={{ color: '#93c5fd' }}>{words[index]}</span>
         </div>
       </h1>
     </>

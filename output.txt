@@ -1,0 +1,1 @@
+SaccoAdminDashboard.tsx(19,12): error TS6133: 'transactions' is declared but its value is never read.

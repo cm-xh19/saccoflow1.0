@@ -1,5 +1,9 @@
 import './index.css';
 import { useState, useEffect } from 'react';
+import Login from './Login';
+import AdminDashboard from './AdminDashboard';
+import SaccoAdminDashboard from './SaccoAdminDashboard';
+import MemberDashboard from './MemberDashboard';
 
 const features = [
   {
@@ -125,9 +129,9 @@ function AnimatedHeadline() {
   return (
     <>
       <h1 className="reveal delay-1">
-        <div className="mb-2">End Paperwork. Stop Fraud.</div>
-        <div>
-          Build <span className="animate-word" style={{ color: '#93c5fd' }}>{words[index]}</span>
+        <div style={{ marginBottom: '12px' }}>End Paperwork. Stop Fraud.</div>
+        <div style={{ minHeight: '2.4em' }}>
+          Build <span className="animate-word" style={{ color: '#93c5fd', display: 'inline-block' }}>{words[index]}</span>
         </div>
       </h1>
     </>
@@ -135,6 +139,16 @@ function AnimatedHeadline() {
 }
 
 export default function App() {
+  const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'superadmin' | 'saccoadmin' | 'member'>('landing');
+
+  if (currentPage === 'login') {
+    return <Login onBack={() => setCurrentPage('landing')} onLogin={(role) => setCurrentPage(role as any)} />;
+  }
+
+  if (currentPage === 'superadmin') return <AdminDashboard onLogout={() => setCurrentPage('landing')} />;
+  if (currentPage === 'saccoadmin') return <SaccoAdminDashboard onLogout={() => setCurrentPage('landing')} />;
+  if (currentPage === 'member') return <MemberDashboard onLogout={() => setCurrentPage('landing')} />;
+
   return (
     <div className="page">
       <header className="nav">
@@ -157,7 +171,7 @@ export default function App() {
               <svg viewBox="0 0 24 24"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.627l-5.1-6.658-5.712 6.658H2.562l7.746-8.973L1.54 2.25h6.798l4.882 6.268L18.244 2.25zM17.474 20.451h1.829L6.75 3.75H4.823l12.651 16.701z" /></svg>
             </a>
           </div>
-          <button className="btn ghost login-outline">Login</button>
+          <button className="btn ghost login-outline" onClick={() => setCurrentPage('login')}>Login</button>
         </div>
       </header>
 

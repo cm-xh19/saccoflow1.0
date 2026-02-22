@@ -5,6 +5,7 @@ import Login from './Login';
 import AdminDashboard from './AdminDashboard';
 import SaccoAdminDashboard from './SaccoAdminDashboard';
 import MemberDashboard from './MemberDashboard';
+import ResetPassword from './ResetPassword';
 
 const features = [
   {
@@ -140,10 +141,18 @@ function AnimatedHeadline() {
 }
 
 export default function App() {
-  const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'superadmin' | 'saccoadmin' | 'member'>('landing');
+  const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'superadmin' | 'saccoadmin' | 'member' | 'reset-password'>('landing');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    // Detect invite/recovery tokens in the URL hash (e.g. #access_token=...&type=recovery)
+    const hash = window.location.hash;
+    if (hash && (hash.includes('type=recovery') || hash.includes('type=invite') || hash.includes('type=signup'))) {
+      setCurrentPage('reset-password');
+      setLoading(false);
+      return;
+    }
+
     const checkSession = async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
@@ -156,9 +165,14 @@ export default function App() {
     checkSession();
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
-      if (session) {
+      if (_event === 'PASSWORD_RECOVERY') {
+        setCurrentPage('reset-password');
+        setLoading(false);
+        return;
+      }
+      if (session && currentPage !== 'reset-password') {
         fetchProfile(session.user.id);
-      } else {
+      } else if (!session) {
         setCurrentPage('landing');
       }
     });
@@ -184,6 +198,8 @@ export default function App() {
   if (loading) {
     return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
   }
+
+  if (currentPage === 'reset-password') return <ResetPassword />;
 
   if (currentPage === 'login') {
     return <Login onBack={() => setCurrentPage('landing')} onLogin={(role) => setCurrentPage(role as any)} />;

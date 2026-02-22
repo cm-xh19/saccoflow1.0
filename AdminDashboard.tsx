@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Building2, Users, Plus, LogOut, Shield, Menu, X, Mail, Globe } from 'lucide-react';
 import { supabase } from './src/lib/supabase';
+import { supabaseAdmin } from './src/lib/supabaseAdmin';
 import './dashboard.css';
 
 interface AdminDashboardProps {
@@ -56,6 +57,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         if (!newSacco.name || !newSacco.email) return;
         setLoading(true);
 
+        // Step 1: Create the SACCO record
         const { data, error } = await supabase
             .from('saccos')
             .insert([{
@@ -69,13 +71,35 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             .single();
 
         if (error) {
-            alert(error.message);
+            alert('Error creating SACCO: ' + error.message);
             setLoading(false);
             return;
         }
 
-        // Ideally here you invite the admin using a backend endpoint that calls auth.admin.createUser
-        // Since we are frontend only, we just register the organization.
+        // Step 2: Invite the SACCO admin by email (sends them a password setup link)
+        if (supabaseAdmin) {
+            const redirectUrl = window.location.origin + '/#type=recovery';
+            const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
+                newSacco.email,
+                {
+                    data: {
+                        role: 'sacco_admin',
+                        sacco_id: data.id,
+                        full_name: newSacco.name + ' Admin'
+                    },
+                    redirectTo: redirectUrl
+                }
+            );
+
+            if (inviteError) {
+                alert('SACCO created, but failed to send invite email: ' + inviteError.message +
+                    '\n\nYou can manually create the user in Supabase Auth dashboard.');
+            } else {
+                alert('✅ SACCO created! An invite email has been sent to ' + newSacco.email + ' to set their password.');
+            }
+        } else {
+            alert('SACCO created, but Service Role Key is not configured. Cannot send invite email.\n\nAdd VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file to enable invitations.');
+        }
 
         setSaccos([{ ...data, usersCount: 0, status: data.status as 'active' | 'suspended' }, ...saccos]);
         setNewSacco({ name: '', email: '', location: '', nin: '', status: 'active' });

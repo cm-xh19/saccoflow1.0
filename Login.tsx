@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from './src/lib/supabase';
 import './index.css';
 
 interface LoginProps {
@@ -9,16 +10,59 @@ interface LoginProps {
 export default function Login({ onBack, onLogin }: LoginProps) {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
 
-    const handleSubmit = (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (email === 'admin@saccoflow.com') {
-            onLogin('superadmin');
-        } else if (email === 'admin@sacco.com') {
-            onLogin('saccoadmin');
-        } else {
-            // Default to member
-            onLogin('member');
+        setLoading(true);
+        setError(null);
+
+        try {
+            const { data, error: signInError } = await supabase.auth.signInWithPassword({
+                email,
+                password
+            });
+
+            if (signInError) throw signInError;
+
+            // Wait a moment for the trigger to insert the profile if this is a first login 
+            // after creating a user, though it should be fast.
+            const { data: profileData, error: profileError } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', data.user.id)
+                .single();
+
+            if (profileError) {
+                // Wait briefly and retry once if the trigger was slightly delayed
+                await new Promise(r => setTimeout(r, 1000));
+                const { data: retryData, error: retryError } = await supabase
+                    .from('profiles')
+                    .select('role')
+                    .eq('id', data.user.id)
+                    .single();
+                if (retryError) throw retryError;
+
+                const role = retryData.role;
+                if (role === 'saccoflow_admin') onLogin('superadmin');
+                else if (role === 'sacco_admin') onLogin('saccoadmin');
+                else onLogin('member');
+                return;
+            }
+
+            const role = profileData.role;
+            if (role === 'saccoflow_admin') {
+                onLogin('superadmin');
+            } else if (role === 'sacco_admin') {
+                onLogin('saccoadmin');
+            } else {
+                onLogin('member');
+            }
+        } catch (err: any) {
+            setError(err.message);
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -35,6 +79,12 @@ export default function Login({ onBack, onLogin }: LoginProps) {
                 <div className="login-card reveal delay-1">
                     <h2>Welcome back</h2>
                     <p>Sign in to your SaccoFlow account</p>
+
+                    {error && (
+                        <div style={{ background: '#fce8e8', color: '#c53030', padding: '12px', borderRadius: '8px', marginBottom: '16px', fontSize: '0.9rem' }}>
+                            {error}
+                        </div>
+                    )}
 
                     <form onSubmit={handleSubmit} className="login-form">
                         <div className="form-group">
@@ -64,7 +114,9 @@ export default function Login({ onBack, onLogin }: LoginProps) {
                             />
                         </div>
 
-                        <button type="submit" className="btn primary full-width">Sign in</button>
+                        <button type="submit" className="btn primary full-width" disabled={loading}>
+                            {loading ? 'Signing in...' : 'Sign in'}
+                        </button>
                     </form>
 
                     <div className="login-footer">

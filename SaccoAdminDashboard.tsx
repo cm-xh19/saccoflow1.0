@@ -1,27 +1,28 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
     LayoutDashboard, Users, ArrowRightLeft, CreditCard,
     FileText, ShieldAlert, LogOut, Bell, Menu, Plus, Search, Filter, Briefcase, X
 } from 'lucide-react';
+import { supabase } from './src/lib/supabase';
 import './dashboard.css';
 
 interface SaccoAdminProps { onLogout: () => void; }
 
 interface Member {
-    id: number; name: string; phone: string; email: string; nin: string; status: 'Active' | 'Inactive'; dateJoined: string;
+    id: string; name: string; phone: string; email: string; nin: string; status: 'Active' | 'Inactive'; dateJoined: string; profile_id?: string;
 }
 interface Transaction {
-    id: number; memberName: string; type: 'Deposit' | 'Withdrawal' | 'Loan'; amount: number; date: string; note: string;
+    id: string; memberName: string; member_id: string; type: 'deposit' | 'withdrawal'; amount: number; date: string; note: string;
 }
 interface Loan {
-    id: number; memberName: string; amount: number; purpose: string; status: 'Pending' | 'Approved' | 'Rejected'; date: string; repaymentDate: string;
+    id: string; memberName: string; member_id: string; amount: number; purpose: string; status: 'pending' | 'approved' | 'rejected' | 'active' | 'completed'; date: string; repaymentDate: string;
 }
 interface AuditLog {
-    id: number; action: string; user: string; date: string; details: string;
+    id: string; action: string; details: string; date: string; user: string;
 }
 
-const EMPTY_MEMBER: Omit<Member, 'id'> = { name: '', phone: '', email: '', nin: '', status: 'Active', dateJoined: '' };
-const EMPTY_TXN: { memberId: string; type: Transaction['type']; amount: string; note: string } = { memberId: '', type: 'Deposit', amount: '', note: '' };
+const EMPTY_MEMBER: Omit<Member, 'id' | 'profile_id'> = { name: '', phone: '', email: '', nin: '', status: 'Active', dateJoined: '' };
+const EMPTY_TXN: { memberId: string; type: Transaction['type']; amount: string; note: string } = { memberId: '', type: 'deposit', amount: '', note: '' };
 
 export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
     const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -37,7 +38,7 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
     // Modal state
     const [showAddMember, setShowAddMember] = useState(false);
     const [memberForm, setMemberForm] = useState({ ...EMPTY_MEMBER });
-    const [editMemberId, setEditMemberId] = useState<number | null>(null);
+    const [editMemberId, setEditMemberId] = useState<string | null>(null);
 
     const [showAddTxn, setShowAddTxn] = useState(false);
     const [txnForm, setTxnForm] = useState({ ...EMPTY_TXN });
@@ -58,46 +59,132 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
     const [reportDateFrom, setReportDateFrom] = useState('');
     const [reportDateTo, setReportDateTo] = useState('');
 
-    const nextId = useRef(1);
+    const [currentSaccoId, setCurrentSaccoId] = useState<string | null>(null);
+
+    useEffect(() => {
+        fetchData();
+    }, []);
+
+    const fetchData = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: profile } = await supabase.from('profiles').select('sacco_id').eq('id', session.user.id).single();
+        if (profile?.sacco_id) {
+            setCurrentSaccoId(profile.sacco_id);
+
+            const { data: membersData } = await supabase.from('members').select('*');
+            if (membersData) {
+                setMembers(membersData.map(m => ({ ...m, dateJoined: m.date_joined })));
+            }
+
+            const { data: txnsData } = await supabase.from('transactions').select('*');
+            if (txnsData) {
+                setTransactions(txnsData.map(t => ({
+                    ...t,
+                    memberName: membersData?.find(m => m.id === t.member_id)?.name || 'Unknown',
+                })));
+            }
+
+            const { data: loansData } = await supabase.from('loans').select('*');
+            if (loansData) {
+                setLoans(loansData.map(l => ({
+                    ...l,
+                    memberName: membersData?.find(m => m.id === l.member_id)?.name || 'Unknown',
+                    repaymentDate: l.repayment_date
+                })));
+            }
+        }
+    };
 
     // ─── Member handlers ───────────────────────────────────────
     function openAddMember() { setMemberForm({ ...EMPTY_MEMBER }); setEditMemberId(null); setShowAddMember(true); }
     function openEditMember(m: Member) { setMemberForm({ name: m.name, phone: m.phone, email: m.email, nin: m.nin, status: m.status, dateJoined: m.dateJoined }); setEditMemberId(m.id); setShowAddMember(true); }
-    function saveMember() {
-        if (!memberForm.name || !memberForm.dateJoined) return;
+
+    async function saveMember() {
+        if (!memberForm.name || !currentSaccoId) return;
+
         if (editMemberId !== null) {
-            setMembers(prev => prev.map(m => m.id === editMemberId ? { ...m, ...memberForm } : m));
+            await supabase.from('members').update({
+                name: memberForm.name,
+                phone: memberForm.phone,
+                email: memberForm.email,
+                nin: memberForm.nin,
+                status: memberForm.status
+            }).eq('id', editMemberId);
         } else {
-            setMembers(prev => [...prev, { id: nextId.current++, ...memberForm }]);
+            // Usually requires Service Role key, provided per prompt request
+            const { data: authData, error: authError } = await (supabase.auth.admin as any)?.createUser?.({
+                email: memberForm.email,
+                email_confirm: true,
+                user_metadata: { role: 'member', full_name: memberForm.name, sacco_id: currentSaccoId }
+            });
+
+            if (authError || !authData?.user) {
+                alert("Could not implicitly create auth user via admin. Ensure service role key is bound or manually create them: " + (authError?.message || ""));
+                return;
+            }
+
+            await supabase.from('members').insert([{
+                sacco_id: currentSaccoId,
+                profile_id: authData.user.id,
+                name: memberForm.name,
+                phone: memberForm.phone,
+                email: memberForm.email,
+                nin: memberForm.nin,
+                status: memberForm.status,
+                date_joined: memberForm.dateJoined || new Date().toISOString().split('T')[0]
+            }]);
         }
+
+        await fetchData();
         setShowAddMember(false);
     }
-    function deleteMember(id: number) { setMembers(prev => prev.filter(m => m.id !== id)); }
+
+    async function deleteMember(id: string) {
+        if (!confirm('Delete member?')) return;
+        await supabase.from('members').delete().eq('id', id);
+        await fetchData();
+    }
 
     // ─── Transaction handlers ──────────────────────────────────
-    function saveTxn() {
-        if (!txnForm.memberId || !txnForm.amount) return;
-        const member = members.find(m => m.id === Number(txnForm.memberId));
-        setTransactions(prev => [...prev, {
-            id: nextId.current++,
-            memberName: member?.name ?? 'Unknown',
+    async function saveTxn() {
+        if (!txnForm.memberId || !txnForm.amount || !currentSaccoId) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+        await supabase.from('transactions').insert([{
+            sacco_id: currentSaccoId,
+            member_id: txnForm.memberId,
             type: txnForm.type,
             amount: Number(txnForm.amount),
-            date: new Date().toISOString().split('T')[0],
             note: txnForm.note,
+            created_by: session?.user.id
         }]);
+
+        await fetchData();
         setTxnForm({ ...EMPTY_TXN });
         setShowAddTxn(false);
     }
 
     // ─── Loan handlers ─────────────────────────────────────────
-    function updateLoanStatus(id: number, status: Loan['status']) {
-        setLoans(prev => prev.map(l => l.id === id ? { ...l, status } : l));
+    async function updateLoanStatus(id: string, status: Loan['status']) {
+        await supabase.from('loans').update({ status }).eq('id', id);
+        await fetchData();
     }
 
     // ─── Notification handler ──────────────────────────────────
-    function sendNotif() {
-        if (!notifTitle || !notifBody) return;
+    async function sendNotif() {
+        if (!notifTitle || !notifBody || !currentSaccoId) return;
+
+        const { data: { session } } = await supabase.auth.getSession();
+
+        await supabase.from('notifications').insert([{
+            sacco_id: currentSaccoId,
+            title: notifTitle,
+            message: notifBody,
+            created_by: session?.user.id
+        }]);
+
         setNotifSent(true);
         setTimeout(() => { setNotifSent(false); setNotifTitle(''); setNotifBody(''); setShowNotif(false); }, 2000);
     }
@@ -144,12 +231,12 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                             </div>
                             <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('transactions')}>
                                 <div className="metric-label">Total Savings <ArrowRightLeft size={20} color="#718096" /></div>
-                                <div className="metric-value">UGX {transactions.filter(t => t.type === 'Deposit').reduce((s, t) => s + t.amount, 0).toLocaleString()}</div>
+                                <div className="metric-value">UGX {transactions.filter(t => t.type === 'deposit').reduce((s, t) => s + Number(t.amount), 0).toLocaleString()}</div>
                                 <span className="action-link" style={{ fontSize: '0.85rem', marginTop: '12px', display: 'inline-block' }}>View Transactions →</span>
                             </div>
                             <div className="metric-card" style={{ cursor: 'pointer' }} onClick={() => setActiveTab('loans')}>
                                 <div className="metric-label">Active Loans <Briefcase size={20} color="#718096" /></div>
-                                <div className="metric-value">{loans.filter(l => l.status === 'Approved').length}</div>
+                                <div className="metric-value">{loans.filter(l => l.status === 'approved' || l.status === 'active').length}</div>
                                 <span className="action-link" style={{ fontSize: '0.85rem', marginTop: '12px', display: 'inline-block' }}>View Loans →</span>
                             </div>
                         </div>
@@ -228,8 +315,8 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                                         {filteredTxns.map(t => (
                                             <tr key={t.id}>
                                                 <td>{t.memberName}</td>
-                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'Deposit' ? '#e6f4ea' : t.type === 'Loan' ? '#e8f0fe' : '#fce8e8', color: t.type === 'Deposit' ? '#2d7a47' : t.type === 'Loan' ? '#1a56db' : '#c53030' }}>{t.type}</span></td>
-                                                <td>{t.amount.toLocaleString()}</td>
+                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'deposit' ? '#e6f4ea' : '#fce8e8', color: t.type === 'deposit' ? '#2d7a47' : '#c53030', textTransform: 'capitalize' }}>{t.type}</span></td>
+                                                <td>{Number(t.amount).toLocaleString()}</td>
                                                 <td>{t.date}</td>
                                                 <td>{t.note || '—'}</td>
                                             </tr>
@@ -255,17 +342,17 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                                         {loans.map(l => (
                                             <tr key={l.id}>
                                                 <td>{l.memberName}</td>
-                                                <td>{l.amount.toLocaleString()}</td>
+                                                <td>{Number(l.amount).toLocaleString()}</td>
                                                 <td>{l.purpose}</td>
                                                 <td>{l.date}</td>
                                                 <td>{l.repaymentDate}</td>
-                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: l.status === 'Approved' ? '#e6f4ea' : l.status === 'Rejected' ? '#fce8e8' : '#fef9e7', color: l.status === 'Approved' ? '#2d7a47' : l.status === 'Rejected' ? '#c53030' : '#92610a' }}>{l.status}</span></td>
+                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: l.status === 'approved' ? '#e6f4ea' : l.status === 'rejected' ? '#fce8e8' : '#fef9e7', color: l.status === 'approved' ? '#2d7a47' : l.status === 'rejected' ? '#c53030' : '#92610a', textTransform: 'capitalize' }}>{l.status}</span></td>
                                                 <td style={{ display: 'flex', gap: '8px' }}>
-                                                    {l.status === 'Pending' && (<>
-                                                        <button className="action-link" onClick={() => updateLoanStatus(l.id, 'Approved')}>Approve</button>
-                                                        <button style={{ color: '#e53e3e', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600 }} onClick={() => updateLoanStatus(l.id, 'Rejected')}>Reject</button>
+                                                    {l.status === 'pending' && (<>
+                                                        <button className="action-link" onClick={() => updateLoanStatus(l.id, 'approved')}>Approve</button>
+                                                        <button style={{ color: '#e53e3e', cursor: 'pointer', background: 'none', border: 'none', fontWeight: 600 }} onClick={() => updateLoanStatus(l.id, 'rejected')}>Reject</button>
                                                     </>)}
-                                                    {l.status !== 'Pending' && <span style={{ color: '#718096', fontSize: '0.85rem' }}>Reviewed</span>}
+                                                    {l.status !== 'pending' && <span style={{ color: '#718096', fontSize: '0.85rem' }}>Reviewed</span>}
                                                 </td>
                                             </tr>
                                         ))}
@@ -433,9 +520,8 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                             <div>
                                 <label className="label-field">Transaction Type</label>
                                 <select className="input-field" value={txnForm.type} onChange={e => setTxnForm(f => ({ ...f, type: e.target.value as Transaction['type'] }))}>
-                                    <option value="Deposit">Deposit</option>
-                                    <option value="Withdrawal">Withdrawal</option>
-                                    <option value="Loan">Loan</option>
+                                    <option value="deposit">Deposit</option>
+                                    <option value="withdrawal">Withdrawal</option>
                                 </select>
                             </div>
                             <div>

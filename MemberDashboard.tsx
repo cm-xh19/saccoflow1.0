@@ -1,7 +1,8 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
     Home, CreditCard, ArrowRightLeft, Bell, LogOut, Filter, Menu, X
 } from 'lucide-react';
+import { supabase } from './src/lib/supabase';
 import './dashboard.css';
 
 interface MemberDashboardProps {
@@ -9,24 +10,24 @@ interface MemberDashboardProps {
 }
 
 interface Transaction {
-    id: number;
-    type: 'Deposit' | 'Withdrawal' | 'Loan';
+    id: string;
+    type: 'deposit' | 'withdrawal';
     amount: number;
     date: string;
     note: string;
 }
 
 interface LoanRequest {
-    id: number;
+    id: string;
     amount: number;
     purpose: string;
-    status: 'Pending' | 'Approved' | 'Rejected';
+    status: 'pending' | 'approved' | 'rejected' | 'active' | 'completed';
     date: string;
     repaymentDate: string;
 }
 
 interface Reminder {
-    id: number;
+    id: string;
     title: string;
     message: string;
     date: string;
@@ -39,11 +40,11 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
     const orgName = "Your SACCO";
 
     // Data state
-    const [transactions] = useState<Transaction[]>([]);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
     const [loans, setLoans] = useState<LoanRequest[]>([]);
-    const [reminders] = useState<Reminder[]>([]);
+    const [reminders, setReminders] = useState<Reminder[]>([]);
+    const [currentMember, setCurrentMember] = useState<any>(null);
 
-    // Form state
     const [loanForm, setLoanForm] = useState({
         name: '',
         amount: '',
@@ -52,31 +53,61 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
     });
     const [loanSuccess, setLoanSuccess] = useState(false);
 
-    // Filter state
     const [txnDateFrom, setTxnDateFrom] = useState('');
     const [txnDateTo, setTxnDateTo] = useState('');
 
-    const nextId = useRef(1);
+    useEffect(() => {
+        fetchData();
+    }, []);
 
-    const handleLoanSubmit = (e: React.FormEvent) => {
+    const fetchData = async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return;
+
+        const { data: profile } = await supabase.from('profiles').select('sacco_id, full_name').eq('id', session.user.id).single();
+        if (!profile) return;
+
+        const { data: member } = await supabase.from('members').select('*').eq('profile_id', session.user.id).maybeSingle();
+        if (member) {
+            setCurrentMember(member);
+
+            const { data: txns } = await supabase.from('transactions').select('*').eq('member_id', member.id);
+            if (txns) setTransactions(txns);
+
+            const { data: loansData } = await supabase.from('loans').select('*').eq('member_id', member.id);
+            if (loansData) setLoans(loansData.map((l: any) => ({ ...l, repaymentDate: l.repayment_date })));
+
+            const { data: notifs } = await supabase.from('notifications').select('*').eq('sacco_id', profile.sacco_id).order('created_at', { ascending: false });
+            if (notifs) setReminders(notifs.map((n: any) => ({ id: n.id, title: n.title, message: n.message, date: n.created_at.split('T')[0] })));
+        }
+    }
+
+    const handleLoanSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!loanForm.amount || !loanForm.purpose || !loanForm.repaymentDate) return;
+        if (!loanForm.amount || !loanForm.purpose || !loanForm.repaymentDate || !currentMember) return;
 
-        const newLoan: LoanRequest = {
-            id: nextId.current++,
+        const { error } = await supabase.from('loans').insert([{
+            sacco_id: currentMember.sacco_id,
+            member_id: currentMember.id,
             amount: Number(loanForm.amount),
             purpose: loanForm.purpose,
-            status: 'Pending',
-            date: new Date().toISOString().split('T')[0],
-            repaymentDate: loanForm.repaymentDate
-        };
+            repayment_date: loanForm.repaymentDate,
+            repayment_term_months: 1,
+            status: 'pending'
+        }]);
 
-        setLoans(prev => [newLoan, ...prev]);
+        if (error) {
+            alert("Error requesting loan: " + error.message);
+            return;
+        }
+
+        await fetchData();
+
         setLoanSuccess(true);
         setTimeout(() => {
             setLoanSuccess(false);
             setActiveTab('home');
-            setLoanForm({ ...loanForm, amount: '', purpose: '', repaymentDate: '' });
+            setLoanForm({ name: '', amount: '', purpose: '', repaymentDate: '' });
         }, 2000);
     };
 
@@ -87,15 +118,15 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
     });
 
     const totalSavings = transactions
-        .filter(t => t.type === 'Deposit')
-        .reduce((sum, t) => sum + t.amount, 0) -
+        .filter(t => t.type === 'deposit')
+        .reduce((sum, t) => sum + Number(t.amount), 0) -
         transactions
-            .filter(t => t.type === 'Withdrawal')
-            .reduce((sum, t) => sum + t.amount, 0);
+            .filter(t => t.type === 'withdrawal')
+            .reduce((sum, t) => sum + Number(t.amount), 0);
 
     const outstandingLoan = loans
-        .filter(l => l.status === 'Approved')
-        .reduce((sum, l) => sum + l.amount, 0);
+        .filter(l => l.status === 'approved' || l.status === 'active')
+        .reduce((sum, l) => sum + Number(l.amount), 0);
 
     const renderContent = () => {
         switch (activeTab) {
@@ -110,11 +141,11 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
                             <div className="metric-card">
                                 <div className="metric-label">Outstanding Loan</div>
                                 <div className="metric-value">UGX {outstandingLoan.toLocaleString()}</div>
-                                {loans.find(l => l.status === 'Approved') && (
+                                {loans.find(l => l.status === 'approved' || l.status === 'active') && (
                                     <div style={{ marginTop: '12px', fontSize: '0.85rem', color: '#e53e3e', fontWeight: 600 }}>
                                         Next Deadline: {loans
-                                            .filter(l => l.status === 'Approved')
-                                            .sort((a, b) => a.repaymentDate.localeCompare(b.repaymentDate))[0].repaymentDate}
+                                            .filter(l => (l.status === 'approved' || l.status === 'active') && l.repaymentDate)
+                                            .sort((a, b) => a.repaymentDate.localeCompare(b.repaymentDate))[0]?.repaymentDate || 'N/A'}
                                     </div>
                                 )}
                             </div>
@@ -138,8 +169,8 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
                                     <tbody>
                                         {transactions.slice(0, 5).map(t => (
                                             <tr key={t.id}>
-                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'Deposit' ? '#e6f4ea' : '#fce8e8', color: t.type === 'Deposit' ? '#2d7a47' : '#c53030' }}>{t.type}</span></td>
-                                                <td>{t.amount.toLocaleString()}</td>
+                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'deposit' ? '#e6f4ea' : '#fce8e8', color: t.type === 'deposit' ? '#2d7a47' : '#c53030', textTransform: 'capitalize' }}>{t.type}</span></td>
+                                                <td>{Number(t.amount).toLocaleString()}</td>
                                                 <td>{t.date}</td>
                                                 <td>{t.note || '—'}</td>
                                             </tr>
@@ -216,8 +247,8 @@ export default function MemberDashboard({ onLogout }: MemberDashboardProps) {
                                     <tbody>
                                         {filteredTxns.map(t => (
                                             <tr key={t.id}>
-                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'Deposit' ? '#e6f4ea' : '#fce8e8', color: t.type === 'Deposit' ? '#2d7a47' : '#c53030' }}>{t.type}</span></td>
-                                                <td>{t.amount.toLocaleString()}</td>
+                                                <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: t.type === 'deposit' ? '#e6f4ea' : '#fce8e8', color: t.type === 'deposit' ? '#2d7a47' : '#c53030', textTransform: 'capitalize' }}>{t.type}</span></td>
+                                                <td>{Number(t.amount).toLocaleString()}</td>
                                                 <td>{t.date}</td>
                                                 <td>{t.note || '—'}</td>
                                             </tr>

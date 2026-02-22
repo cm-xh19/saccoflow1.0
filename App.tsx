@@ -1,5 +1,6 @@
 import './index.css';
 import { useState, useEffect } from 'react';
+import { supabase } from './src/lib/supabase';
 import Login from './Login';
 import AdminDashboard from './AdminDashboard';
 import SaccoAdminDashboard from './SaccoAdminDashboard';
@@ -140,14 +141,57 @@ function AnimatedHeadline() {
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<'landing' | 'login' | 'superadmin' | 'saccoadmin' | 'member'>('landing');
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const checkSession = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setLoading(false);
+      }
+    };
+
+    checkSession();
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event: any, session: any) => {
+      if (session) {
+        fetchProfile(session.user.id);
+      } else {
+        setCurrentPage('landing');
+      }
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const fetchProfile = async (userId: string) => {
+    const { data } = await supabase.from('profiles').select('role').eq('id', userId).single();
+    if (data) {
+      if (data.role === 'saccoflow_admin') setCurrentPage('superadmin');
+      else if (data.role === 'sacco_admin') setCurrentPage('saccoadmin');
+      else setCurrentPage('member');
+    }
+    setLoading(false);
+  }
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    setCurrentPage('landing');
+  };
+
+  if (loading) {
+    return <div style={{ height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>Loading...</div>;
+  }
 
   if (currentPage === 'login') {
     return <Login onBack={() => setCurrentPage('landing')} onLogin={(role) => setCurrentPage(role as any)} />;
   }
 
-  if (currentPage === 'superadmin') return <AdminDashboard onLogout={() => setCurrentPage('landing')} />;
-  if (currentPage === 'saccoadmin') return <SaccoAdminDashboard onLogout={() => setCurrentPage('landing')} />;
-  if (currentPage === 'member') return <MemberDashboard onLogout={() => setCurrentPage('landing')} />;
+  if (currentPage === 'superadmin') return <AdminDashboard onLogout={handleLogout} />;
+  if (currentPage === 'saccoadmin') return <SaccoAdminDashboard onLogout={handleLogout} />;
+  if (currentPage === 'member') return <MemberDashboard onLogout={handleLogout} />;
 
   return (
     <div className="page">

@@ -1,5 +1,6 @@
-import { useState, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { Building2, Users, Plus, LogOut, Shield, Menu, X, Mail, Globe } from 'lucide-react';
+import { supabase } from './src/lib/supabase';
 import './dashboard.css';
 
 interface AdminDashboardProps {
@@ -7,12 +8,12 @@ interface AdminDashboardProps {
 }
 
 interface Sacco {
-    id: number;
+    id: string;
     name: string;
     email: string;
     location: string;
     nin: string;
-    status: 'Active' | 'Suspended';
+    status: 'active' | 'suspended';
     usersCount: number;
 }
 
@@ -26,34 +27,76 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         email: '',
         location: '',
         nin: '',
-        status: 'Active' as const
+        status: 'active' as const
     });
+    const [loading, setLoading] = useState(false);
 
-    const nextId = useRef(1);
+    useEffect(() => {
+        fetchSaccos();
+    }, []);
 
-    const handleAddSacco = (e: React.FormEvent) => {
+    const fetchSaccos = async () => {
+        const { data: saccoData, error: saccoError } = await supabase.from('saccos').select('*').order('created_at', { ascending: false });
+        if (saccoError) return console.error(saccoError);
+
+        const { data: profileData, error: profileError } = await supabase.from('profiles').select('sacco_id');
+        if (profileError) return console.error(profileError);
+
+        const mappedSaccos: Sacco[] = saccoData.map((s: any) => ({
+            ...s,
+            status: s.status === 'active' ? 'active' : 'suspended',
+            usersCount: profileData ? profileData.filter(p => p.sacco_id === s.id).length : 0
+        }));
+
+        setSaccos(mappedSaccos);
+    };
+
+    const handleAddSacco = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!newSacco.name || !newSacco.email) return;
+        setLoading(true);
 
-        const sacco: Sacco = {
-            id: nextId.current++,
-            ...newSacco,
-            usersCount: 0
-        };
+        const { data, error } = await supabase
+            .from('saccos')
+            .insert([{
+                name: newSacco.name,
+                email: newSacco.email,
+                location: newSacco.location,
+                nin: newSacco.nin,
+                status: newSacco.status
+            }])
+            .select()
+            .single();
 
-        setSaccos([...saccos, sacco]);
-        setNewSacco({ name: '', email: '', location: '', nin: '', status: 'Active' });
+        if (error) {
+            alert(error.message);
+            setLoading(false);
+            return;
+        }
+
+        // Ideally here you invite the admin using a backend endpoint that calls auth.admin.createUser
+        // Since we are frontend only, we just register the organization.
+
+        setSaccos([{ ...data, usersCount: 0, status: data.status as 'active' | 'suspended' }, ...saccos]);
+        setNewSacco({ name: '', email: '', location: '', nin: '', status: 'active' });
         setShowAddModal(false);
+        setLoading(false);
     };
 
-    const deleteSacco = (id: number) => {
-        setSaccos(saccos.filter(s => s.id !== id));
+    const deleteSacco = async (id: string) => {
+        if (!confirm('Are you sure you want to delete this SACCO?')) return;
+        const { error } = await supabase.from('saccos').delete().eq('id', id);
+        if (!error) setSaccos(saccos.filter(s => s.id !== id));
     };
 
-    const toggleStatus = (id: number) => {
-        setSaccos(saccos.map(s =>
-            s.id === id ? { ...s, status: s.status === 'Active' ? 'Suspended' : 'Active' } : s
-        ));
+    const toggleStatus = async (id: string, currentStatus: string) => {
+        const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
+        const { error } = await supabase.from('saccos').update({ status: newStatus }).eq('id', id);
+        if (!error) {
+            setSaccos(saccos.map(s =>
+                s.id === id ? { ...s, status: newStatus as 'active' | 'suspended' } : s
+            ));
+        }
     };
 
     const totalLiveUsers = saccos.reduce((acc, s) => acc + s.usersCount, 0);
@@ -134,17 +177,18 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                                     padding: '4px 10px',
                                                     borderRadius: '999px',
                                                     fontSize: '0.8rem',
-                                                    background: s.status === 'Active' ? '#e6f4ea' : '#fce8e8',
-                                                    color: s.status === 'Active' ? '#2d7a47' : '#c53030',
-                                                    fontWeight: 600
+                                                    background: s.status === 'active' ? '#e6f4ea' : '#fce8e8',
+                                                    color: s.status === 'active' ? '#2d7a47' : '#c53030',
+                                                    fontWeight: 600,
+                                                    textTransform: 'capitalize'
                                                 }}>
                                                     {s.status}
                                                 </span>
                                             </td>
                                             <td>
                                                 <div style={{ display: 'flex', gap: '12px' }}>
-                                                    <button className="action-link" onClick={() => toggleStatus(s.id)}>
-                                                        {s.status === 'Active' ? 'Suspend' : 'Activate'}
+                                                    <button className="action-link" onClick={() => toggleStatus(s.id, s.status)}>
+                                                        {s.status === 'active' ? 'Suspend' : 'Activate'}
                                                     </button>
                                                     <button className="action-link" style={{ color: '#e53e3e' }} onClick={() => deleteSacco(s.id)}>
                                                         Remove
@@ -226,7 +270,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                             </div>
                             <div className="modal-footer">
                                 <button type="button" className="btn-outline-cancel" onClick={() => setShowAddModal(false)}>Cancel</button>
-                                <button type="submit" className="btn-dark">Register SACCO</button>
+                                <button type="submit" className="btn-dark" disabled={loading}>{loading ? 'Registering...' : 'Register SACCO'}</button>
                             </div>
                         </form>
                     </div>

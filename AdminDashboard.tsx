@@ -76,26 +76,34 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
             return;
         }
 
-        // Step 2: Invite the SACCO admin by email (sends them a password setup link)
+        // Step 2: Create the SACCO admin user and send password setup email
         if (supabaseAdmin) {
-            const redirectUrl = window.location.origin + '/#type=recovery';
-            const { error: inviteError } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-                newSacco.email,
-                {
-                    data: {
-                        role: 'sacco_admin',
-                        sacco_id: data.id,
-                        full_name: newSacco.name + ' Admin'
-                    },
-                    redirectTo: redirectUrl
+            // Create user WITHOUT a password (so there's no "old password" to conflict)
+            const { error: createError } = await supabaseAdmin.auth.admin.createUser({
+                email: newSacco.email,
+                email_confirm: true,
+                user_metadata: {
+                    role: 'sacco_admin',
+                    sacco_id: data.id,
+                    full_name: newSacco.name + ' Admin'
                 }
-            );
+            });
 
-            if (inviteError) {
-                alert('SACCO created, but failed to send invite email: ' + inviteError.message +
+            if (createError) {
+                alert('SACCO created, but failed to create admin user: ' + createError.message +
                     '\n\nYou can manually create the user in Supabase Auth dashboard.');
             } else {
-                alert('✅ SACCO created! An invite email has been sent to ' + newSacco.email + ' to set their password.');
+                // Now send a password reset email so they can set their password
+                const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+                    newSacco.email,
+                    { redirectTo: window.location.origin }
+                );
+
+                if (resetError) {
+                    alert('SACCO & user created, but failed to send password setup email: ' + resetError.message);
+                } else {
+                    alert('✅ SACCO created! A password setup email has been sent to ' + newSacco.email);
+                }
             }
         } else {
             alert('SACCO created, but Service Role Key is not configured. Cannot send invite email.\n\nAdd VITE_SUPABASE_SERVICE_ROLE_KEY to your .env file to enable invitations.');

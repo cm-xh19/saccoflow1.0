@@ -8,7 +8,7 @@ import './dashboard.css';
 interface SaccoAdminProps { onLogout: () => void; }
 
 interface Member {
-    id: number; name: string; phone: string; email: string; status: 'Active' | 'Inactive'; dateJoined: string;
+    id: number; name: string; phone: string; email: string; nin: string; status: 'Active' | 'Inactive'; dateJoined: string;
 }
 interface Transaction {
     id: number; memberName: string; type: 'Deposit' | 'Withdrawal' | 'Loan'; amount: number; date: string; note: string;
@@ -20,7 +20,7 @@ interface AuditLog {
     id: number; action: string; user: string; date: string; details: string;
 }
 
-const EMPTY_MEMBER: Omit<Member, 'id'> = { name: '', phone: '', email: '', status: 'Active', dateJoined: '' };
+const EMPTY_MEMBER: Omit<Member, 'id'> = { name: '', phone: '', email: '', nin: '', status: 'Active', dateJoined: '' };
 const EMPTY_TXN: { memberId: string; type: Transaction['type']; amount: string; note: string } = { memberId: '', type: 'Deposit', amount: '', note: '' };
 
 export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
@@ -62,7 +62,7 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
 
     // ─── Member handlers ───────────────────────────────────────
     function openAddMember() { setMemberForm({ ...EMPTY_MEMBER }); setEditMemberId(null); setShowAddMember(true); }
-    function openEditMember(m: Member) { setMemberForm({ name: m.name, phone: m.phone, email: m.email, status: m.status, dateJoined: m.dateJoined }); setEditMemberId(m.id); setShowAddMember(true); }
+    function openEditMember(m: Member) { setMemberForm({ name: m.name, phone: m.phone, email: m.email, nin: m.nin, status: m.status, dateJoined: m.dateJoined }); setEditMemberId(m.id); setShowAddMember(true); }
     function saveMember() {
         if (!memberForm.name || !memberForm.dateJoined) return;
         if (editMemberId !== null) {
@@ -180,11 +180,12 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                                 <div className="dash-empty-state"><Users size={48} strokeWidth={1.5} /><p>No members found.</p></div>
                             ) : (
                                 <table className="dash-table">
-                                    <thead><tr><th>Name</th><th>Phone</th><th>Email</th><th>Status</th><th>Date Joined</th><th>Actions</th></tr></thead>
+                                    <thead><tr><th>Name</th><th>NIN</th><th>Phone</th><th>Email</th><th>Status</th><th>Date Joined</th><th>Actions</th></tr></thead>
                                     <tbody>
                                         {filteredMembers.map(m => (
                                             <tr key={m.id}>
                                                 <td>{m.name}</td>
+                                                <td>{m.nin || '—'}</td>
                                                 <td>{m.phone}</td>
                                                 <td>{m.email}</td>
                                                 <td><span style={{ padding: '4px 10px', borderRadius: '999px', fontSize: '0.8rem', background: m.status === 'Active' ? '#e6f4ea' : '#fce8e8', color: m.status === 'Active' ? '#2d7a47' : '#c53030' }}>{m.status}</span></td>
@@ -391,6 +392,7 @@ export default function SaccoAdminDashboard({ onLogout }: SaccoAdminProps) {
                             <div><label className="label-field">Full Name *</label><input className="input-field" placeholder="Jane Doe" value={memberForm.name} onChange={e => setMemberForm(f => ({ ...f, name: e.target.value }))} /></div>
                             <div><label className="label-field">Phone</label><input className="input-field" placeholder="+256…" value={memberForm.phone} onChange={e => setMemberForm(f => ({ ...f, phone: e.target.value }))} /></div>
                             <div><label className="label-field">Email</label><input type="email" className="input-field" placeholder="jane@example.com" value={memberForm.email} onChange={e => setMemberForm(f => ({ ...f, email: e.target.value }))} /></div>
+                            <div><label className="label-field">NIN</label><input className="input-field" placeholder="CM12345678…" value={memberForm.nin} onChange={e => setMemberForm(f => ({ ...f, nin: e.target.value }))} /></div>
                             <div>
                                 <label className="label-field">Status</label>
                                 <select className="input-field" value={memberForm.status} onChange={e => setMemberForm(f => ({ ...f, status: e.target.value as 'Active' | 'Inactive' }))}>

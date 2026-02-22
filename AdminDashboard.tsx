@@ -11,6 +11,7 @@ interface Sacco {
     name: string;
     email: string;
     location: string;
+    nin: string;
     status: 'Active' | 'Suspended';
     usersCount: number;
 }
@@ -24,6 +25,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         name: '',
         email: '',
         location: '',
+        nin: '',
         status: 'Active' as const
     });
 
@@ -40,7 +42,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
         };
 
         setSaccos([...saccos, sacco]);
-        setNewSacco({ name: '', email: '', location: '', status: 'Active' });
+        setNewSacco({ name: '', email: '', location: '', nin: '', status: 'Active' });
         setShowAddModal(false);
     };
 
@@ -111,6 +113,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                 <thead>
                                     <tr>
                                         <th>Organization</th>
+                                        <th>Registration/NIN</th>
                                         <th>Location</th>
                                         <th>Admin Email</th>
                                         <th>Users</th>
@@ -122,6 +125,7 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                     {saccos.map(s => (
                                         <tr key={s.id}>
                                             <td style={{ fontWeight: 600 }}>{s.name}</td>
+                                            <td>{s.nin || '—'}</td>
                                             <td>{s.location || '—'}</td>
                                             <td>{s.email}</td>
                                             <td>{s.usersCount}</td>
@@ -209,6 +213,15 @@ export default function AdminDashboard({ onLogout }: AdminDashboardProps) {
                                             />
                                         </div>
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="label-field">National ID / NIN</label>
+                                    <input
+                                        className="input-field"
+                                        placeholder="Enter NIN or Registration No."
+                                        value={newSacco.nin}
+                                        onChange={e => setNewSacco({ ...newSacco, nin: e.target.value })}
+                                    />
                                 </div>
                             </div>
                             <div className="modal-footer">

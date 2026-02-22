@@ -232,7 +232,7 @@
     background: #ffffff;
     border: 1px solid #e3e8ee;
     border-radius: 12px;
-    overflow: hidden;
+    overflow-x: auto;
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02);
     width: 100%;
 }
@@ -240,6 +240,7 @@
 .dash-table {
     width: 100%;
     border-collapse: collapse;
+    min-width: 600px;
 }
 
 .dash-table th,
